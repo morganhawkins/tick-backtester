@@ -1,12 +1,16 @@
-use std::rc::Rc;
-
-use crate::time_keeping::timer::Timer;
+use crate::order_book::updates::Side;
 
 pub enum Action {
-    OrderPlace(),
-    OrderCancel(),
+    OrderPlace(f64, u8, i32, Side),
+    OrderCancel(f64, u8, i32, Side),
 }
 
-pub struct ActionProducer {
-    timer: Rc<Timer>,
+impl Action{
+    pub fn get_ts(&self) -> f64{
+        match self {
+            Action::OrderPlace(ts, _, _, _) => *ts,
+            Action::OrderCancel(ts, _, _, _) => *ts,
+        }
+    }
 }
+
