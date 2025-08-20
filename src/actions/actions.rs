@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::time_keeping::timer::Timer;
 
 pub enum Action {
@@ -6,5 +8,5 @@ pub enum Action {
 }
 
 pub struct ActionProducer {
-    timer: Timer,
+    timer: Rc<Timer>,
 }
