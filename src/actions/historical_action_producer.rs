@@ -1,9 +1,9 @@
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::rc::Rc;
 
-use crate::time_keeping::timer::Timer;
 use super::actions::Action;
+use crate::time_keeping::timer::Timer;
 
 // have this open a file and read it into a buffer
 pub struct HistoricalActionProducer {
@@ -23,14 +23,13 @@ impl HistoricalActionProducer {
     }
 
     // only pops actions if it will occur before next time step
-    fn pop_action (&self) -> Option<Action> {
+    fn pop_action(&self) -> Option<Action> {
         let next_ts = self.timer.peek_next_time();
         let next_action_ts = self.action_buffer.borrow().front()?.get_ts();
         if next_action_ts <= next_ts {
-            Some(self.action_buffer.borrow_mut().pop_front()?)   
+            Some(self.action_buffer.borrow_mut().pop_front()?)
         } else {
             None
         }
-        
     }
 }
