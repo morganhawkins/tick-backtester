@@ -12,6 +12,7 @@ pub struct HistoricalActionProducer {
 }
 
 impl HistoricalActionProducer {
+    // pop all actions that will occur before the next time step
     pub fn grab_cycle(&self) -> Vec<Action> {
         let mut current_actions = Vec::new();
 

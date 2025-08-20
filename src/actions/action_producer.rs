@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use super::actions::Action;
-use crate::order_book::updates::Side;
+use crate::order_book::updates::{Side, Trader};
 use crate::time_keeping::timer::Timer;
 
 pub struct ActionProducer {
@@ -19,11 +19,16 @@ impl ActionProducer {
 
     pub fn order_place(&self, price: u8, quantity: i32, side: Side) -> Action {
         let ts = self.timer.get_time() + self.latency_constant;
-        Action::OrderPlace(ts, price, quantity, side)
+        Action::OrderPlace(ts, price, quantity, side, Trader::Me)
     }
 
-    pub fn order_cancel(&self, price: u8, quantity: i32, side: Side) -> Action {
+    pub fn order_cancel(&self, price: u8, side: Side) -> Action {
         let ts = self.timer.get_time() + self.latency_constant;
-        Action::OrderCancel(ts, price, quantity, side)
+        Action::OrderCancel(ts, price, side, Trader::Me)
+    }
+
+    pub fn trade_take(&self, price: u8, quantity: i32, side: Side) -> Action {
+        let ts = self.timer.get_time() + self.latency_constant;
+        Action::TradeTake(ts, price, quantity, side, Trader::Me)
     }
 }
