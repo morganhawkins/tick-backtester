@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::error::Error;
 
 use super::construction::{BookSnapshot, Order};
@@ -7,8 +8,8 @@ use crate::actions::actions::Action;
 
 pub struct OrderBook {
     // Granular vector of orders to preserve time order
-    asks: RefCell<[Vec<Order>; 99]>,
-    bids: RefCell<[Vec<Order>; 99]>,
+    asks: [Rc<RefCell<Vec<Order>>>; 99],
+    bids: [Rc<RefCell<Vec<Order>>>; 99],
     // Order amounts aggregated by side and trader
     // Used to quickly find matches
     me_ask_liquidity: RefCell<[i32; 99]>,
@@ -18,9 +19,9 @@ pub struct OrderBook {
 }
 
 impl OrderBook {
-    fn create_blank_ladders() -> ([Vec<Order>; 99], [Vec<Order>; 99]) {
-        let ask_ladder: [Vec<Order>; 99] = std::array::from_fn(|_| Vec::new());
-        let bid_ladder: [Vec<Order>; 99] = std::array::from_fn(|_| Vec::new());
+    fn create_blank_ladders() -> ([Rc<RefCell<Vec<Order>>>; 99], [Rc<RefCell<Vec<Order>>>; 99]) {
+        let ask_ladder: [Rc<RefCell<Vec<Order>>>; 99] = std::array::from_fn(|_| Rc::new(RefCell::new(Vec::new())));
+        let bid_ladder: [Rc<RefCell<Vec<Order>>>; 99] = std::array::from_fn(|_| Rc::new(RefCell::new(Vec::new())));
         (ask_ladder, bid_ladder)
     }
 
@@ -47,8 +48,8 @@ impl OrderBook {
         ) = OrderBook::create_blank_liquidity();
 
         return Self {
-            asks: RefCell::new(ask_ladder),
-            bids: RefCell::new(bid_ladder),
+            asks: ask_ladder,
+            bids: bid_ladder,
             me_ask_liquidity: RefCell::new(me_ask_liquidity),
             me_bid_liquidity: RefCell::new(me_bid_liquidity),
             other_ask_liquidity: RefCell::new(other_ask_liquidity),
@@ -70,7 +71,7 @@ impl OrderBook {
             // push order
             let price_idx = (ask_price - 1) as usize;
             let order = Order::new(Trader::Other, ask_quantity);
-            ask_ladder[price_idx].push(order);
+            ask_ladder[price_idx].borrow_mut().push(order);
             // add liquidity
             other_ask_liquidity[price_idx] += ask_quantity;
         }
@@ -80,18 +81,119 @@ impl OrderBook {
             // push order
             let price_idx = (bid_price - 1) as usize;
             let order = Order::new(Trader::Other, bid_quantity);
-            bid_ladder[price_idx].push(order);
+            bid_ladder[price_idx].borrow_mut().push(order);
             // add liquidity
             other_bid_liquidity[price_idx] += bid_quantity;
         }
 
         return Self {
-            asks: RefCell::new(ask_ladder),
-            bids: RefCell::new(bid_ladder),
+            asks: ask_ladder,
+            bids: bid_ladder,
             me_ask_liquidity: RefCell::new(me_ask_liquidity),
             me_bid_liquidity: RefCell::new(me_bid_liquidity),
             other_ask_liquidity: RefCell::new(other_ask_liquidity),
             other_bid_liquidity: RefCell::new(other_bid_liquidity),
+        };
+    }
+
+    fn get_orders(&self, price:u8, side: &Side) -> Rc<RefCell<Vec<Order>>> {
+        let price_idx = (price-1u8) as usize;
+        // selecting relevant side of orderbook
+        let ladder = match side {
+            Side::Buy => Rc::clone(&self.bids[price_idx]),
+            Side::Sell => Rc::clone(&self.asks[price_idx]),
+        };
+        ladder
+    }
+
+    // Subtract order quantity from `trader`'s order starting with the FIRST order
+    // until the amount to subtract is satisfied
+    // If quantity to subtract exceeds to total amount at price level placed by trader,
+    // then the remaining un-subtracted amount is discarded
+    fn sub_front(&self, price: u8, quantity: i32, side: Side, trader: Trader) {
+        // quantity to track progress on cancellations
+        let mut quant_to_subtract = quantity;
+        // iterate through orders at price level in order of oldest -> newest
+        for order in self.get_orders(price, &side).borrow_mut().iter_mut(){
+            // make sure that trade maker is same as person modifying
+            if order.trader.is_same(&trader) {
+                if quant_to_subtract > order.quantity {
+                    // if we still need to subtract more quantity
+                    // subtract order quant from quant left to subtract
+                    quant_to_subtract -= order.quantity;
+                    // 0-out order quantity
+                    order.quantity = 0_i32;
+                    
+                } else {
+                    // if our subtraction is satisfied on this order
+                    order.quantity -= quant_to_subtract;
+                    break
+                    
+                }
+            }
+        };
+    }
+    
+    // Subtract order quantity from `trader`'s order starting with the LAST order
+    // until the amount to subtract is satisfied
+    // If quantity to subtract exceeds to total amount at price level placed by trader,
+    // then the remaining un-subtracted amount is discarded
+    fn sub_back(&self, price: u8, quantity: i32, side: Side, trader: Trader) {
+        // quantity to track progress on cancellations
+        let mut quant_to_subtract = quantity;
+        // iterate through orders at price level in order of newest -> oldest
+        for order in self.get_orders(price, &side).borrow_mut().iter_mut().rev(){
+            // make sure that trade maker is same as person modifying
+            if order.trader.is_same(&trader) {
+                if quant_to_subtract > order.quantity {
+                    // if we still need to subtract more quantity
+                    // subtract order quant from quant left to subtract
+                    quant_to_subtract -= order.quantity;
+                    // 0-out order quantity
+                    order.quantity = 0_i32;
+                    
+                } else {
+                    // if our subtraction is satisfied on this order
+                    order.quantity -= quant_to_subtract;
+                    break
+                    
+                }
+            }
+        };
+    }
+    
+    // Add order quantity to the back of the order book
+    // if most recent order is from same trader, increase the quantity by `quantity`
+    // if most recent order is from different trader, push a new order onto the book
+    fn add_back(&self, price: u8, quantity: i32, side: Side, trader: Trader) {
+        let can_modify =  match self.get_orders(price, &side).borrow().last() {
+            Some(order) => order.trader.is_same(&trader),
+            None => false
+        };
+        if can_modify {
+            // if we can modify, we know there is a last Order
+            // and it is the same trader and `trader` arguement
+            self.get_orders(price, &side).borrow_mut().last_mut().unwrap().quantity += quantity;
+        } else {
+            // if we can't modify, we need to create a new Order
+            // and push it into price level Vec
+            let new_order = Order::new(trader, quantity);
+            self.get_orders(price, &side).borrow_mut().push(new_order);
+        }
+        
+    }
+
+    // NOTE: there is no `Self::add_front` method because no one can skip when
+    // placing orer
+
+    fn digest_update(&self, update: BookUpdate) {
+        match update {
+            BookUpdate::OrderbookDelta(delta) => {
+
+            },
+            BookUpdate::OrderTake(take) => {
+
+            },
         };
     }
 
@@ -108,6 +210,29 @@ impl OrderBook {
         
         // creating order take actions
         // decrease quaniity by matches amount and create ordebook delta
+
+        updates
+    }
+
+    fn update_from_order_cancel(
+        &self,
+        ts: f64,
+        price: u8,
+        side: Side,
+    ) -> Vec<BookUpdate> {
+        let mut updates: Vec<BookUpdate> = Vec::new();
+
+        updates
+    }
+
+    fn update_from_trade_take(
+        &self,
+        ts: f64,
+        price: u8,
+        quant: i32,
+        side: Side,
+    ) -> Vec<BookUpdate> {
+        let mut updates: Vec<BookUpdate> = Vec::new();
 
         updates
     }
