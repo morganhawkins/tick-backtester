@@ -3,9 +3,71 @@ pub enum Trader {
     Other,
 }
 
+impl Trader {
+    pub fn is_me(&self) -> bool {
+        match self {
+            Self::Me => true,
+            Self::Other => false,
+        }
+    }
+
+    pub fn is_other(&self) -> bool {
+        match self {
+            Self::Me => false,
+            Self::Other => true,
+        }
+    }
+    
+    pub fn is_same(&self, rhs: &Trader) -> bool {
+        if self.is_me() == rhs.is_me(){
+            return true
+        } else {
+            return false;
+        }
+    }
+    
+    pub fn opposite(&self) -> Self {
+        match self {
+            Self::Me => Self::Other,
+            Self::Other => Self::Me,
+        }
+    }
+}
+
 pub enum Side {
     Buy,
     Sell,
+}
+
+impl Side {
+    pub fn is_buy(&self) -> bool {
+        match self {
+            Self::Buy => true,
+            Self::Sell => false,
+        }
+    }
+
+    pub fn is_sell(&self) -> bool {
+        match self {
+            Self::Buy => false,
+            Self::Sell => true,
+        }
+    }
+    
+    pub fn is_same(&self, rhs: &Side) -> bool {
+        if self.is_buy() == rhs.is_buy(){
+            return true
+        } else {
+            return false;
+        }
+    }
+    
+    pub fn opposite(&self) -> Self {
+        match self {
+            Self::Buy => Self::Sell,
+            Self::Sell => Self::Buy,
+        }
+    }
 }
 
 pub enum BookUpdate {
