@@ -17,15 +17,15 @@ impl Trader {
             Self::Other => true,
         }
     }
-    
+
     pub fn is_same(&self, rhs: &Trader) -> bool {
-        if self.is_me() == rhs.is_me(){
-            return true
+        if self.is_me() == rhs.is_me() {
+            return true;
         } else {
             return false;
         }
     }
-    
+
     pub fn opposite(&self) -> Self {
         match self {
             Self::Me => Self::Other,
@@ -53,15 +53,15 @@ impl Side {
             Self::Sell => true,
         }
     }
-    
+
     pub fn is_same(&self, rhs: &Side) -> bool {
-        if self.is_buy() == rhs.is_buy(){
-            return true
+        if self.is_buy() == rhs.is_buy() {
+            return true;
         } else {
             return false;
         }
     }
-    
+
     pub fn opposite(&self) -> Self {
         match self {
             Self::Buy => Self::Sell,
