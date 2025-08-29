@@ -1,1 +1,4 @@
 /target
+*.ipynb
+*.venv
+*DS_Store
