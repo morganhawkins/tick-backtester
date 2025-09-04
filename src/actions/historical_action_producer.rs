@@ -35,30 +35,6 @@ pub enum HistoricalAction{
     Event(Event),
 }
 
-impl TryInto<Action> for HistoricalAction {
-    type Error = String;
-    fn try_into(self) -> Result<Action, String> {
-        match self {
-            HistoricalAction::Event(event) => {
-                let side = match event.side.as_str(){
-                    "buy" => Side::Buy,
-                    "sell" => Side::Sell,
-                    _ => return Err(String::from("side not recognized while performing HistricalAction into Action"))
-                };
-                if event.r#type == "trade" {
-                    // is trade take
-                    return Ok(Action::TradeTake(event.ts, event.price, event.quantity, side, Trader::Other))
-                } else {
-                    // is orderbook delta
-                    return Ok(Action::OrderPlace(event.ts, event.price, event.quantity, side, Trader::Other))
-                }
-            },
-            HistoricalAction::Init(_) => {
-                Err(String::from("cannot turn an orderbook snapshot into an action"))
-            }
-        }
-    }
-}
 
 impl HistoricalAction {
     pub fn is_init(&self) -> bool {
@@ -75,6 +51,27 @@ impl HistoricalAction {
         }
     }
 
+    fn into_action(self, trader: &Rc<Trader>) -> Result<Action, String> {
+        match self {
+            HistoricalAction::Event(event) => {
+                let side = match event.side.as_str(){
+                    "buy" => Side::Buy,
+                    "sell" => Side::Sell,
+                    _ => return Err(String::from("side not recognized while performing HistricalAction into Action"))
+                };
+                if event.r#type == "trade" {
+                    // is trade take
+                    return Ok(Action::TradeTake(event.ts, event.price, event.quantity, side, trader.clone()))
+                } else {
+                    // is orderbook delta
+                    return Ok(Action::OrderPlace(event.ts, event.price, event.quantity, side, trader.clone()))
+                }
+            },
+            HistoricalAction::Init(_) => {
+                Err(String::from("cannot turn an orderbook snapshot into an action"))
+            }
+        }
+    }
 }
 
 struct BufferedActionRecordReader {
@@ -127,6 +124,7 @@ impl Iterator for BufferedActionRecordReader{
 // have this open a file and read it into a buffer
 pub struct HistoricalActionProducer {
     timer: Rc<Timer>,
+    trader: Rc<Trader>,
     action_buffer: BufferedActionRecordReader,
 }
 
@@ -134,11 +132,12 @@ pub struct HistoricalActionProducer {
 
 impl HistoricalActionProducer{
 
-    pub fn new(timer: &Rc<Timer>, path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(timer: &Rc<Timer>, trader: &Rc<Trader>, path: &str) -> Result<Self, Box<dyn Error>> {
         let action_reader = BufferedActionRecordReader::new(path)?;
         Ok(Self{
-            action_buffer: action_reader,
             timer: timer.clone(),
+            trader: trader.clone(),
+            action_buffer: action_reader,
         })
     }
 
@@ -159,7 +158,7 @@ impl HistoricalActionProducer{
         
         let next_item_time = self.action_buffer.peek_next_time()?;
         if next_item_time < next_ts {
-            return Some(self.action_buffer.next()?.try_into().ok()?)
+            return Some(self.action_buffer.next()?.into_action(&self.trader).ok()?)
         } else {
             return None
         };
@@ -172,7 +171,7 @@ impl HistoricalActionProducer{
             self
                 .action_buffer
                 .next()?
-                .try_into()
+                .into_action(&self.trader)
                 .ok()?
         )
     }
