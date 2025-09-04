@@ -1,5 +1,8 @@
+use std::error::Error;
+
 use crate::order_book::updates::{Side, Trader};
 
+#[derive(Debug)]
 pub enum Action {
     // Change your order quantity at a price level
     // This can be seen as an orderbook_delta
@@ -24,4 +27,16 @@ impl Action {
             Action::TradeTake(ts, _, _, _, _) => *ts,
         }
     }
+
 }
+
+// struct representation of Action enum to deserialize 
+// book deltas/trades from exchanges
+pub struct ActionRecord {
+    r#type: String,
+    price: u8,
+    quantity: i32,
+    side: String,
+}
+
+
