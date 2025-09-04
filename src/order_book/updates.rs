@@ -1,39 +1,50 @@
-pub enum Trader {
-    Me,
-    Other,
+use std::cell::RefCell;
+
+use rand::Rng;
+
+#[derive(Debug)]
+pub struct Trader {
+    id: u64,
+    shares: RefCell<i32>,
+    cents: RefCell<i32>,
+    me: bool,
 }
 
 impl Trader {
     pub fn is_me(&self) -> bool {
-        match self {
-            Self::Me => true,
-            Self::Other => false,
-        }
+        self.me
     }
 
     pub fn is_other(&self) -> bool {
-        match self {
-            Self::Me => false,
-            Self::Other => true,
-        }
+        !self.me
     }
 
     pub fn is_same(&self, rhs: &Trader) -> bool {
-        if self.is_me() == rhs.is_me() {
-            return true;
-        } else {
-            return false;
-        }
+        self.id==rhs.id
     }
 
-    pub fn opposite(&self) -> Self {
-        match self {
-            Self::Me => Self::Other,
-            Self::Other => Self::Me,
-        }
+    pub fn new_me() -> Self {
+        // there can only be 1 me so id will always be 0
+        Self { id: 0, shares: RefCell::new(0), cents: RefCell::new(0), me: true }
     }
+    
+    pub fn new_other() -> Self {
+        // there can be many others so id will always be 0
+        let mut rng = rand::rng();
+        Self { id: rng.random_range(1..u64::MAX), shares: RefCell::new(0), cents: RefCell::new(0), me: false }
+    }
+
+    pub fn delta_shares(&self, shares: i32) {
+        *self.shares.borrow_mut() += shares;
+    }
+    pub fn delta_cents(&self, cents: i32) {
+        *self.cents.borrow_mut() += cents;
+    }
+
+    
 }
 
+#[derive(Debug)]
 pub enum Side {
     Buy,
     Sell,
