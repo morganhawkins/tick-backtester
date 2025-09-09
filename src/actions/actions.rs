@@ -39,5 +39,3 @@ pub struct ActionRecord {
     quantity: i32,
     side: String,
 }
-
-

@@ -41,10 +41,18 @@ impl Trader {
         *self.cents.borrow_mut() += cents;
     }
 
+    pub fn shares(&self) -> i32 {
+        *self.shares.borrow()
+    }
+
+    pub fn cents(&self) -> i32 {
+        *self.cents.borrow()
+    }
+
     
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Side {
     Buy,
     Sell,
