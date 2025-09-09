@@ -11,8 +11,8 @@ fn main() {
     let me = Rc::new(Trader::new_me());
     let other = Rc::new(Trader::new_other());
     let book = OrderBook::from_snapshot(vec![(51, 10)], vec![(49, 10)], &other);
-    let mut me_producer = ActionProducer::new(&timer, &me, 0.0);
-    let mut other_producer = ActionProducer::new(&timer, &other, 0.0);
+    let me_producer = ActionProducer::new(&timer, &me, 0.0);
+    // let other_producer = ActionProducer::new(&timer, &other, 0.0);
 
     println!("{:?}", book);
     let me_take = me_producer.order_place(52, 15, Side::Buy);

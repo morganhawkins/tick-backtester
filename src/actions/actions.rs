@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::rc::Rc;
 
 use crate::order_book::updates::{Side, Trader};
@@ -31,11 +30,3 @@ impl Action {
 
 }
 
-// struct representation of Action enum to deserialize 
-// book deltas/trades from exchanges
-pub struct ActionRecord {
-    r#type: String,
-    price: u8,
-    quantity: i32,
-    side: String,
-}

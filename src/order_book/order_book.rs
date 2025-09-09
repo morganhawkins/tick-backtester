@@ -1,9 +1,8 @@
 use std::cell::RefCell;
-use std::error::Error;
 use std::rc::Rc;
 
 use super::construction::{BookSnapshot, Order};
-use super::updates::{BookUpdate, Side, Trader};
+use super::updates::{Side, Trader};
 use crate::actions::actions::Action;
 
 pub struct OrderBook {
@@ -92,7 +91,7 @@ impl OrderBook {
     }
 
     pub fn from_snapshot(asks: Vec<(u8, i32)>, bids: Vec<(u8, i32)>, other_trader: &Rc<Trader>) -> Self {
-        let (mut ask_ladder, mut bid_ladder) = OrderBook::create_blank_ladders();
+        let (ask_ladder, bid_ladder) = OrderBook::create_blank_ladders();
         let (me_ask_liquidity, me_bid_liquidity, mut other_ask_liquidity, mut other_bid_liquidity) =
             OrderBook::create_blank_liquidity();
 
