@@ -150,7 +150,7 @@ impl OrderBook {
     // until the amount to subtract is satisfied
     // If quantity to subtract exceeds to total amount at price level placed by trader,
     // then the remaining un-subtracted amount is discarded
-    fn sub_front(&self, price: u8, quantity: i32, side: Side, trader: Trader) {
+    fn sub_front(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
         // quantity to track progress on cancellations
         let mut quant_to_subtract = quantity;
         // iterate through orders at price level in order of oldest -> newest
@@ -176,7 +176,7 @@ impl OrderBook {
     // until the amount to subtract is satisfied
     // If quantity to subtract exceeds to total amount at price level placed by trader,
     // then the remaining un-subtracted amount is discarded
-    fn sub_back(&self, price: u8, quantity: i32, side: Side, trader: Trader) {
+    fn sub_back(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
         // quantity to track progress on cancellations
         let mut quant_to_subtract = quantity;
         // iterate through orders at price level in order of newest -> oldest
@@ -224,6 +224,7 @@ impl OrderBook {
         }
     }
 
+    ///
     fn match_order(&self, take_order: &Order){
         let price_increment = match take_order.side {
             Side::Buy => 1,
@@ -281,7 +282,11 @@ impl OrderBook {
             self.match_order(&take_order);
             self.add_back(price, *take_order.quantity.borrow(), side, trader);
         } else if quant < 0 {
-
+            if trader.is_me() {
+                self.sub_back(price, quant, side, trader);
+            } else {
+                self.sub_front(price, quant, side, trader);
+            }
         }
 
         0i32
