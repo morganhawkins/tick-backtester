@@ -20,18 +20,28 @@ impl Trader {
     }
 
     pub fn is_same(&self, rhs: &Trader) -> bool {
-        self.id==rhs.id
+        self.id == rhs.id
     }
 
     pub fn new_me() -> Self {
         // there can only be 1 me so id will always be 0
-        Self { id: 0, shares: RefCell::new(0), cents: RefCell::new(0), me: true }
+        Self {
+            id: 0,
+            shares: RefCell::new(0),
+            cents: RefCell::new(0),
+            me: true,
+        }
     }
-    
+
     pub fn new_other() -> Self {
         // there can be many others so id will always be 0
         let mut rng = rand::rng();
-        Self { id: rng.random_range(1..u64::MAX), shares: RefCell::new(0), cents: RefCell::new(0), me: false }
+        Self {
+            id: rng.random_range(1..u64::MAX),
+            shares: RefCell::new(0),
+            cents: RefCell::new(0),
+            me: false,
+        }
     }
 
     pub fn delta_shares(&self, shares: i32) {
@@ -48,8 +58,6 @@ impl Trader {
     pub fn cents(&self) -> i32 {
         *self.cents.borrow()
     }
-
-    
 }
 
 #[derive(Debug, Clone)]

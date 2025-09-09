@@ -27,6 +27,4 @@ impl Action {
             Action::TradeTake(ts, _, _, _, _) => *ts,
         }
     }
-
 }
-

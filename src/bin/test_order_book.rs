@@ -1,10 +1,9 @@
 use std::rc::Rc;
 
-use tick_backtest::order_book::updates::{Trader, Side};
-use tick_backtest::order_book::order_book::OrderBook;
-use tick_backtest::time_keeping::timer::Timer;
 use tick_backtest::actions::action_producer::ActionProducer;
-
+use tick_backtest::order_book::order_book::OrderBook;
+use tick_backtest::order_book::updates::{Side, Trader};
+use tick_backtest::time_keeping::timer::Timer;
 
 fn main() {
     let timer = Rc::new(Timer::new(1756428105.0, 0.5));
@@ -22,7 +21,4 @@ fn main() {
     let me_take = me_producer.order_place(51, 15, Side::Sell);
     book.digest_action(me_take);
     println!("{:?}", book);
-
 }
-
-

@@ -15,38 +15,37 @@ pub struct OrderBook {
     me_bid_liquidity: RefCell<[i32; 99]>,
     other_ask_liquidity: RefCell<[i32; 99]>,
     other_bid_liquidity: RefCell<[i32; 99]>,
-    // best bid ask stored since nearly all updates 
+    // best bid ask stored since nearly all updates
     // are order place/cancels
     bid: RefCell<u8>,
     ask: RefCell<u8>,
-
 }
 
 impl std::fmt::Debug for OrderBook {
     fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        for (price_idx,ask_level) in self.asks.iter().enumerate().rev() {
-            let price = price_idx+1;
+        for (price_idx, ask_level) in self.asks.iter().enumerate().rev() {
+            let price = price_idx + 1;
             let mut quantity = 0;
             for order in ask_level.borrow().iter() {
                 quantity += *order.quantity.borrow();
             }
-            if quantity != 0{
+            if quantity != 0 {
                 println!("{price} - {quantity}");
             }
         }
         println!("-------");
-        for (price_idx,bid_level) in self.bids.iter().enumerate().rev() {
-            let price = price_idx+1;
+        for (price_idx, bid_level) in self.bids.iter().enumerate().rev() {
+            let price = price_idx + 1;
             let mut quantity = 0;
             for order in bid_level.borrow().iter() {
                 quantity += *order.quantity.borrow();
             }
-            if quantity != 0{
+            if quantity != 0 {
                 println!("{price} - {quantity}");
             }
         }
 
-        return Ok(())
+        return Ok(());
     }
 }
 
@@ -86,11 +85,14 @@ impl OrderBook {
             other_bid_liquidity: RefCell::new(other_bid_liquidity),
             bid: RefCell::new(0),
             ask: RefCell::new(100),
-        }
-
+        };
     }
 
-    pub fn from_snapshot(asks: Vec<(u8, i32)>, bids: Vec<(u8, i32)>, other_trader: &Rc<Trader>) -> Self {
+    pub fn from_snapshot(
+        asks: Vec<(u8, i32)>,
+        bids: Vec<(u8, i32)>,
+        other_trader: &Rc<Trader>,
+    ) -> Self {
         let (ask_ladder, bid_ladder) = OrderBook::create_blank_ladders();
         let (me_ask_liquidity, me_bid_liquidity, mut other_ask_liquidity, mut other_bid_liquidity) =
             OrderBook::create_blank_liquidity();
@@ -104,11 +106,11 @@ impl OrderBook {
             ask_ladder[price_idx].borrow_mut().push(order);
             // add liquidity
             other_ask_liquidity[price_idx] += ask_quantity;
-            if (ask_price < best_ask) && (ask_quantity > 0){
+            if (ask_price < best_ask) && (ask_quantity > 0) {
                 best_ask = ask_price;
             }
         }
-        
+
         // Filling in bid ladder
         let mut best_bid = 0u8;
         for (bid_price, bid_quantity) in bids {
@@ -118,7 +120,7 @@ impl OrderBook {
             bid_ladder[price_idx].borrow_mut().push(order);
             // add liquidity
             other_bid_liquidity[price_idx] += bid_quantity;
-            if (bid_price > best_bid) && (bid_quantity > 0){
+            if (bid_price > best_bid) && (bid_quantity > 0) {
                 best_bid = bid_price;
             }
         }
@@ -132,7 +134,7 @@ impl OrderBook {
             other_bid_liquidity: RefCell::new(other_bid_liquidity),
             bid: RefCell::new(best_bid),
             ask: RefCell::new(best_ask),
-        }
+        };
     }
 
     fn get_orders(&self, price: u8, side: &Side) -> Rc<RefCell<Vec<Order>>> {
@@ -208,7 +210,8 @@ impl OrderBook {
         if can_modify {
             // if we can modify, we know there is a last Order, so we can unwrap
             // and it is the same trader and `trader` arguement
-            *self.get_orders(price, &side)
+            *self
+                .get_orders(price, &side)
                 .borrow_mut()
                 .last_mut()
                 .unwrap()
@@ -224,7 +227,7 @@ impl OrderBook {
     }
 
     ///
-    fn match_order(&self, take_order: &Order){
+    fn match_order(&self, take_order: &Order) {
         let price_increment = match take_order.side {
             Side::Buy => 1,
             Side::Sell => -1,
@@ -239,20 +242,23 @@ impl OrderBook {
 
         // while we have shares left to match and the price
         let mut orders;
-        while ((best_price*price_increment) <= price_ceil) && (best_price <= 99) && (best_price >= 1){
+        while ((best_price * price_increment) <= price_ceil)
+            && (best_price <= 99)
+            && (best_price >= 1)
+        {
             orders = self.get_orders(best_price as u8, &take_order.side.opposite());
 
             for order in orders.borrow_mut().iter_mut() {
                 // if the order's trader is opposite from
                 order.fill(&take_order);
 
-                if *take_order.quantity.borrow() == 0{
-                    break
+                if *take_order.quantity.borrow() == 0 {
+                    break;
                 }
             }
-            
-            if *take_order.quantity.borrow() == 0{
-                break
+
+            if *take_order.quantity.borrow() == 0 {
+                break;
             }
 
             best_price += price_increment;
@@ -263,9 +269,9 @@ impl OrderBook {
     /// Does not process updates, just produces
     ///
     ///
-    /// # Arguments 
-    /// 
-    /// 
+    /// # Arguments
+    ///
+    ///
     /// # Returns
     /// The number of shares that were matched with another trade
     fn digest_order_place(
@@ -291,13 +297,11 @@ impl OrderBook {
         0i32
     }
 
-
-
     ///
     ///
-    /// # Arguments 
-    /// 
-    /// 
+    /// # Arguments
+    ///
+    ///
     /// # Returns
     /// The number of shares that were matched successfully
     fn digest_trade_take(
@@ -307,39 +311,40 @@ impl OrderBook {
         quant: i32,
         side: Side,
         trader: Rc<Trader>,
-    ) -> i32{
+    ) -> i32 {
         let take_order = Order::new(&trader, quant, side.clone(), price);
         self.match_order(&take_order);
         return quant - *take_order.quantity.borrow();
     }
-    
+
     ///
     ///
-    /// # Arguments 
-    /// 
-    /// 
+    /// # Arguments
+    ///
+    ///
     /// # Returns
     /// Unit
-    fn digest_order_cancel(&self, _ts: f64, price: u8, side: Side, trader: Rc<Trader>){
+    fn digest_order_cancel(&self, _ts: f64, price: u8, side: Side, trader: Rc<Trader>) {
         let price_idx = (price as usize) - 1;
         let orders = match side {
-            Side::Buy =>  self.bids[price_idx].clone(),
+            Side::Buy => self.bids[price_idx].clone(),
             Side::Sell => self.asks[price_idx].clone(),
         };
-        
+
         // only retain orders from traders who are not the cancellign trader
-        orders.borrow_mut().retain(|order| !order.trader.is_same(&trader));
-        
+        orders
+            .borrow_mut()
+            .retain(|order| !order.trader.is_same(&trader));
     }
-    
+
     // fn update_from_action(&self, action: Action) -> BookUpdate {
     ///
     ///
-    /// # Arguments 
-    /// 
-    /// 
+    /// # Arguments
+    ///
+    ///
     /// # Returns
-    /// 
+    ///
     pub fn digest_action(&self, action: Action) -> () {
         match action {
             Action::OrderPlace(ts, price, quant, side, trader) => {
@@ -354,4 +359,3 @@ impl OrderBook {
         }
     }
 }
-

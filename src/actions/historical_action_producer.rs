@@ -1,15 +1,15 @@
-use std::iter::Peekable;
 use std::error::Error;
-use std::rc::Rc;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::iter::Peekable;
 use std::path::Path;
+use std::rc::Rc;
 
 use serde::Deserialize;
 
 use super::actions::Action;
-use crate::time_keeping::timer::Timer;
 use crate::order_book::updates::{Side, Trader};
+use crate::time_keeping::timer::Timer;
 
 #[derive(Deserialize, Debug)]
 pub struct Event {
@@ -26,15 +26,13 @@ pub struct Init {
     pub r#type: String,
     pub buy: Vec<(u8, i32)>,
     pub sell: Vec<(u8, i32)>,
-
 }
 
 #[derive(Debug)]
-pub enum HistoricalAction{
+pub enum HistoricalAction {
     Init(Init),
     Event(Event),
 }
-
 
 impl HistoricalAction {
     pub fn is_init(&self) -> bool {
@@ -54,28 +52,44 @@ impl HistoricalAction {
     fn into_action(self, trader: &Rc<Trader>) -> Result<Action, String> {
         match self {
             HistoricalAction::Event(event) => {
-                let side = match event.side.as_str(){
+                let side = match event.side.as_str() {
                     "buy" => Side::Buy,
                     "sell" => Side::Sell,
-                    _ => return Err(String::from("side not recognized while performing HistricalAction into Action"))
+                    _ => {
+                        return Err(String::from(
+                            "side not recognized while performing HistricalAction into Action",
+                        ));
+                    }
                 };
                 if event.r#type == "trade" {
                     // is trade take
-                    return Ok(Action::TradeTake(event.ts, event.price, event.quantity, side, trader.clone()))
+                    return Ok(Action::TradeTake(
+                        event.ts,
+                        event.price,
+                        event.quantity,
+                        side,
+                        trader.clone(),
+                    ));
                 } else {
                     // is orderbook delta
-                    return Ok(Action::OrderPlace(event.ts, event.price, event.quantity, side, trader.clone()))
+                    return Ok(Action::OrderPlace(
+                        event.ts,
+                        event.price,
+                        event.quantity,
+                        side,
+                        trader.clone(),
+                    ));
                 }
-            },
-            HistoricalAction::Init(_) => {
-                Err(String::from("cannot turn an orderbook snapshot into an action"))
             }
+            HistoricalAction::Init(_) => Err(String::from(
+                "cannot turn an orderbook snapshot into an action",
+            )),
         }
     }
 }
 
 struct BufferedActionRecordReader {
-    read_buffer: Peekable<std::io::Lines<BufReader<File>>>
+    read_buffer: Peekable<std::io::Lines<BufReader<File>>>,
 }
 
 impl BufferedActionRecordReader {
@@ -84,9 +98,7 @@ impl BufferedActionRecordReader {
         let file = File::open(file_path)?;
         let reader = BufReader::new(file);
         let lines = reader.lines().into_iter().peekable();
-        Ok(Self{
-            read_buffer: lines
-        })
+        Ok(Self { read_buffer: lines })
     }
 
     fn de(line: &str) -> Option<HistoricalAction> {
@@ -95,25 +107,19 @@ impl BufferedActionRecordReader {
             Err(_) => HistoricalAction::Init(serde_json::from_str::<Init>(&line).ok()?),
         };
         Some(hist_action)
-
     }
 
-    pub fn peek_next_time(&mut self) -> Option<f64>{
-        let a = self
-            .read_buffer
-            .peek()?
-            .as_ref()
-            .ok()?;
+    pub fn peek_next_time(&mut self) -> Option<f64> {
+        let a = self.read_buffer.peek()?.as_ref().ok()?;
         let next = Self::de(&a)?;
         match next {
             HistoricalAction::Event(event) => Some(event.ts),
-            _ => None
+            _ => None,
         }
-
     }
 }
 
-impl Iterator for BufferedActionRecordReader{
+impl Iterator for BufferedActionRecordReader {
     type Item = HistoricalAction;
     fn next(&mut self) -> Option<Self::Item> {
         let next_line = self.read_buffer.next()?.ok()?;
@@ -128,13 +134,10 @@ pub struct HistoricalActionProducer {
     action_buffer: BufferedActionRecordReader,
 }
 
-
-
-impl HistoricalActionProducer{
-
+impl HistoricalActionProducer {
     pub fn new(timer: &Rc<Timer>, trader: &Rc<Trader>, path: &str) -> Result<Self, Box<dyn Error>> {
         let action_reader = BufferedActionRecordReader::new(path)?;
-        Ok(Self{
+        Ok(Self {
             timer: timer.clone(),
             trader: trader.clone(),
             action_buffer: action_reader,
@@ -155,26 +158,18 @@ impl HistoricalActionProducer{
     // only pops actions if it will occur before next time step
     fn pop_next_action(&mut self) -> Option<Action> {
         let next_ts = self.timer.peek_next_time();
-        
+
         let next_item_time = self.action_buffer.peek_next_time()?;
         if next_item_time < next_ts {
-            return Some(self.action_buffer.next()?.into_action(&self.trader).ok()?)
+            return Some(self.action_buffer.next()?.into_action(&self.trader).ok()?);
         } else {
-            return None
+            return None;
         };
     }
 
     // force grabs next item in the read_buffer even if it's time stamp is too far
     // in the future
     pub fn force_grab_next(&mut self) -> Option<Action> {
-        Some(
-            self
-                .action_buffer
-                .next()?
-                .into_action(&self.trader)
-                .ok()?
-        )
+        Some(self.action_buffer.next()?.into_action(&self.trader).ok()?)
     }
 }
-
-

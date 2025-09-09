@@ -5,8 +5,8 @@ use crate::order_book::updates::{Side, Trader};
 use crate::time_keeping::timer::Timer;
 
 pub struct ActionProducer {
-    timer: Rc<Timer>,      // used to track simulation time
-    trader: Rc<Trader>,      
+    timer: Rc<Timer>, // used to track simulation time
+    trader: Rc<Trader>,
     latency_constant: f64, // represents the client -> matching engine message send latency
 }
 
