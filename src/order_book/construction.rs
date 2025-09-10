@@ -32,35 +32,31 @@ impl Order {
     /// # Returns
     /// the number of shares that were successfully matched
     pub fn fill(&self, order: &Order) -> i32 {
-        if self.trader.is_same(&order.trader) {
-            0
-        } else {
-            let matched_amount = order.quantity.borrow().min(*self.quantity.borrow());
-            let matched_cents = matched_amount * (self.price as i32);
+        let matched_amount = order.quantity.borrow().min(*self.quantity.borrow());
+        let matched_cents = matched_amount * (self.price as i32);
 
-            if matched_amount == 0 {
-                return 0;
-            }
-
-            match self.side {
-                Side::Buy => {
-                    // add shares, subtract money
-                    self.trader.delta_shares(matched_amount);
-                    order.trader.delta_shares(-matched_amount);
-                    self.trader.delta_cents(-matched_cents);
-                    order.trader.delta_cents(matched_cents);
-                }
-                Side::Sell => {
-                    // subtract shares, add money
-                    self.trader.delta_shares(-matched_amount);
-                    order.trader.delta_shares(matched_amount);
-                    self.trader.delta_cents(matched_cents);
-                    order.trader.delta_cents(-matched_cents);
-                }
-            }
-            *self.quantity.borrow_mut() -= matched_amount;
-            *order.quantity.borrow_mut() -= matched_amount;
-            matched_amount
+        if matched_amount == 0 {
+            return 0;
         }
+
+        match self.side {
+            Side::Buy => {
+                // add shares, subtract money
+                self.trader.delta_shares(matched_amount);
+                order.trader.delta_shares(-matched_amount);
+                self.trader.delta_cents(-matched_cents);
+                order.trader.delta_cents(matched_cents);
+            }
+            Side::Sell => {
+                // subtract shares, add money
+                self.trader.delta_shares(-matched_amount);
+                order.trader.delta_shares(matched_amount);
+                self.trader.delta_cents(matched_cents);
+                order.trader.delta_cents(-matched_cents);
+            }
+        }
+        *self.quantity.borrow_mut() -= matched_amount;
+        *order.quantity.borrow_mut() -= matched_amount;
+        matched_amount
     }
 }
