@@ -12,13 +12,22 @@ fn main() {
     let book = OrderBook::from_snapshot(vec![(51, 10)], vec![(49, 10)], &other);
     let me_producer = ActionProducer::new(&timer, &me, 0.0);
     // let other_producer = ActionProducer::new(&timer, &other, 0.0);
-
+    println!("   me: shares {} cents {}", me.shares(), me.cents());
+    println!("other: shares {} cents {}", other.shares(), other.cents());
     println!("{:?}", book);
-    let me_take = me_producer.order_place(52, 15, Side::Buy);
+    
+    
+    let me_take = me_producer.order_place(50, 10, Side::Buy);
     book.digest_action(me_take);
+    
+    println!("   me: shares {} cents {}", me.shares(), me.cents());
+    println!("other: shares {} cents {}", other.shares(), other.cents());
     println!("{:?}", book);
-
-    let me_take = me_producer.order_place(51, 15, Side::Sell);
+    
+    let me_take = me_producer.order_place(49, 15, Side::Sell);
     book.digest_action(me_take);
+    
+    println!("   me: shares {} cents {}", me.shares(), me.cents());
+    println!("other: shares {} cents {}", other.shares(), other.cents());
     println!("{:?}", book);
 }

@@ -34,6 +34,8 @@ impl std::fmt::Debug for OrderBook {
             }
         }
         println!("-------");
+        println!("{}/{}", self.bid.borrow(), self.ask.borrow());
+        println!("-------");
         for (price_idx, bid_level) in self.bids.iter().enumerate().rev() {
             let price = price_idx + 1;
             let mut quantity = 0;
@@ -203,6 +205,23 @@ impl OrderBook {
     // if most recent order is from same trader, increase the quantity by `quantity`
     // if most recent order is from different trader, push a new order onto the book
     fn add_back(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
+        if quantity==0 {
+            return
+        }
+        // update best bid/ask if applicable
+        match side {
+            Side::Buy => {
+                if price > *self.bid.borrow(){
+                    *self.bid.borrow_mut() = price;
+                }
+            }
+            Side::Sell => {
+                if price < *self.ask.borrow(){
+                    *self.ask.borrow_mut() = price;
+                }
+            }
+        };
+        // check if last order in book is of same trader
         let can_modify = match self.get_orders(price, &side).borrow().last() {
             Some(order) => order.trader.is_same(&trader),
             None => false,
@@ -224,9 +243,14 @@ impl OrderBook {
             let new_order = Order::new(&trader, quantity, side, price);
             orders.borrow_mut().push(new_order);
         }
+
     }
 
     ///
+    /// 
+    /// 
+    /// 
+    /// 
     fn match_order(&self, take_order: &Order) {
         let price_increment = match take_order.side {
             Side::Buy => 1,
