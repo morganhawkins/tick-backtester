@@ -15,18 +15,17 @@ fn main() {
     println!("   me: shares {} cents {}", me.shares(), me.cents());
     println!("other: shares {} cents {}", other.shares(), other.cents());
     println!("{:?}", book);
-    
-    
+
     let me_take = me_producer.order_place(50, 10, Side::Buy);
     book.digest_action(me_take);
-    
+
     println!("   me: shares {} cents {}", me.shares(), me.cents());
     println!("other: shares {} cents {}", other.shares(), other.cents());
     println!("{:?}", book);
-    
+
     let me_take = me_producer.order_place(49, 15, Side::Sell);
     book.digest_action(me_take);
-    
+
     println!("   me: shares {} cents {}", me.shares(), me.cents());
     println!("other: shares {} cents {}", other.shares(), other.cents());
     println!("{:?}", book);

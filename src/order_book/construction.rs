@@ -25,7 +25,9 @@ impl Order {
         }
     }
 
-    /// Match two orders. Will
+    /// Match two orders at the price determined by the maker (i.e. self)
+    /// So if a is the maker order and b is the take order. The correct
+    /// code would be a.fill(&b) NOT b.fill(&a)
     ///
     /// # Arguments
     ///

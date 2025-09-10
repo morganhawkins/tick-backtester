@@ -73,6 +73,10 @@ impl OrderBook {
         )
     }
 
+    /// Create a new orderbook with no placed
+    ///
+    /// # Returns
+    /// An orderbook object with no previous actions
     pub fn new_blank() -> Self {
         let (ask_ladder, bid_ladder) = OrderBook::create_blank_ladders();
         let (me_ask_liquidity, me_bid_liquidity, other_ask_liquidity, other_bid_liquidity) =
@@ -90,6 +94,16 @@ impl OrderBook {
         };
     }
 
+    /// Create an order book from a list of bid and ask (price,quantities) tuples.
+    ///
+    ///
+    /// # Arguements
+    /// * asks - vector of (price,quantity) tuples representing liquidity
+    /// * bids - vector of (price,quantity) tuples representing liquidity
+    /// * trader - the trader who placed all of the current orders
+    ///
+    /// # Returns
+    /// An orderbook with resting limit orders
     pub fn from_snapshot(
         asks: Vec<(u8, i32)>,
         bids: Vec<(u8, i32)>,
@@ -149,10 +163,18 @@ impl OrderBook {
         ladder
     }
 
-    // Subtract order quantity from `trader`'s order starting with the FIRST order
-    // until the amount to subtract is satisfied
-    // If quantity to subtract exceeds to total amount at price level placed by trader,
-    // then the remaining un-subtracted amount is discarded
+    /// Subtract order quantity from `trader`'s order starting with the FIRST order
+    /// until the amount to subtract is satisfied
+    /// If quantity to subtract exceeds to total amount at price level placed by trader,
+    /// then the remaining un-subtracted amount is discarded
+    ///
+    ///
+    /// # Arguements
+    /// * price - price to subtract order quantity from
+    /// * quantity - amount to subtract
+    /// * side - side of the order
+    /// * trader - trader performing action
+    ///
     fn sub_front(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
         // quantity to track progress on cancellations
         let mut quant_to_subtract = quantity;
@@ -175,10 +197,17 @@ impl OrderBook {
         }
     }
 
-    // Subtract order quantity from `trader`'s order starting with the LAST order
-    // until the amount to subtract is satisfied
-    // If quantity to subtract exceeds to total amount at price level placed by trader,
-    // then the remaining un-subtracted amount is discarded
+    /// Subtract order quantity from `trader`'s order starting with the LAST order
+    /// until the amount to subtract is satisfied
+    /// If quantity to subtract exceeds to total amount at price level placed by trader,
+    /// then the remaining un-subtracted amount is discarded
+    ///
+    /// # Arguements
+    /// * price - price to subtract order quantity from
+    /// * quantity - amount to subtract
+    /// * side - side of the order
+    /// * trader - trader performing action
+    ///
     fn sub_back(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
         // quantity to track progress on cancellations
         let mut quant_to_subtract = quantity;
@@ -204,19 +233,26 @@ impl OrderBook {
     // Add order quantity to the back of the order book
     // if most recent order is from same trader, increase the quantity by `quantity`
     // if most recent order is from different trader, push a new order onto the book
+    ///
+    /// # Arguements
+    /// * price - price to add order quantity to
+    /// * quantity - amount to add
+    /// * side - side of the order
+    /// * trader - trader performing action
+    ///
     fn add_back(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
-        if quantity==0 {
-            return
+        if quantity == 0 {
+            return;
         }
         // update best bid/ask if applicable
         match side {
             Side::Buy => {
-                if price > *self.bid.borrow(){
+                if price > *self.bid.borrow() {
                     *self.bid.borrow_mut() = price;
                 }
             }
             Side::Sell => {
-                if price < *self.ask.borrow(){
+                if price < *self.ask.borrow() {
                     *self.ask.borrow_mut() = price;
                 }
             }
@@ -243,14 +279,12 @@ impl OrderBook {
             let new_order = Order::new(&trader, quantity, side, price);
             orders.borrow_mut().push(new_order);
         }
-
     }
 
-    ///
-    /// 
-    /// 
-    /// 
-    /// 
+    /// Match a take order with the current order book
+    ///  
+    /// # Arguements
+    /// * take_order - taking order to match with the order book
     fn match_order(&self, take_order: &Order) {
         let price_increment = match take_order.side {
             Side::Buy => 1,
@@ -289,12 +323,13 @@ impl OrderBook {
         }
     }
 
-    /// Create `BookUpdate`s from actions and book state
-    /// Does not process updates, just produces
-    ///
+    /// Digest an order place action
     ///
     /// # Arguments
-    ///
+    /// * price - the price at which to place the limit order
+    /// * quant - the quantity to change order by at the price level
+    /// * side - buy or sell order
+    /// * trader - the trader performing the action
     ///
     /// # Returns
     /// The number of shares that were matched with another trade
@@ -322,9 +357,7 @@ impl OrderBook {
     }
 
     ///
-    ///
-    /// # Arguments
-    ///
+    /// # Arguements
     ///
     /// # Returns
     /// The number of shares that were matched successfully
@@ -342,12 +375,10 @@ impl OrderBook {
     }
 
     ///
-    ///
-    /// # Arguments
-    ///
+    /// # Arguements
     ///
     /// # Returns
-    /// Unit
+    ///
     fn digest_order_cancel(&self, _ts: f64, price: u8, side: Side, trader: Rc<Trader>) {
         let price_idx = (price as usize) - 1;
         let orders = match side {
@@ -361,11 +392,8 @@ impl OrderBook {
             .retain(|order| !order.trader.is_same(&trader));
     }
 
-    // fn update_from_action(&self, action: Action) -> BookUpdate {
     ///
-    ///
-    /// # Arguments
-    ///
+    /// # Arguements
     ///
     /// # Returns
     ///
