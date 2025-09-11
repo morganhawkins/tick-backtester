@@ -18,11 +18,11 @@ pub struct BookSnapshot {
 }
 
 impl Order {
-    /// 
+    ///
     /// # Arguements
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     pub fn new(trader: &Rc<Trader>, quantity: i32, side: Side, price: u8) -> Self {
         Order {
             trader: trader.clone(),
@@ -32,21 +32,20 @@ impl Order {
         }
     }
 
-    /// 
+    ///
     /// # Arguements
-    /// 
+    ///
     /// # Returns
     /// The actual applied change to the order quantity
     pub fn delta_quantity(&self, quantity: i32) -> i32 {
         let value_after_change = (*self.quantity.borrow() + quantity).max(0);
         let applied_delta = value_after_change - *self.quantity.borrow();
         *self.quantity.borrow_mut() = value_after_change;
-        return applied_delta
-
+        return applied_delta;
     }
 
     /// Match two orders at the price determined by the maker (i.e. self)
-    /// So if a is the maker order and b is the take order. The correct 
+    /// So if a is the maker order and b is the take order. The correct
     /// code would be a.fill(&b) NOT b.fill(&a)
     ///
     /// # Arguments

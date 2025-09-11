@@ -61,10 +61,7 @@ impl OrderBook {
     fn create_blank_liquidity() -> ([i32; 99], [i32; 99]) {
         let ask_liquidity: [i32; 99] = std::array::from_fn(|_| 0_i32);
         let bid_liquidity: [i32; 99] = std::array::from_fn(|_| 0_i32);
-        (
-            ask_liquidity,
-            bid_liquidity,
-        )
+        (ask_liquidity, bid_liquidity)
     }
 
     /// Create a new orderbook with no placed
@@ -73,8 +70,7 @@ impl OrderBook {
     /// An orderbook object with no previous actions
     pub fn new_blank() -> Self {
         let (ask_ladder, bid_ladder) = OrderBook::create_blank_ladders();
-        let (ask_liquidity, bid_liquidity) =
-            OrderBook::create_blank_liquidity();
+        let (ask_liquidity, bid_liquidity) = OrderBook::create_blank_liquidity();
 
         return Self {
             asks: ask_ladder,
@@ -102,8 +98,7 @@ impl OrderBook {
         other_trader: &Rc<Trader>,
     ) -> Self {
         let (ask_ladder, bid_ladder) = OrderBook::create_blank_ladders();
-        let (mut ask_liquidity, mut bid_liquidity) =
-            OrderBook::create_blank_liquidity();
+        let (mut ask_liquidity, mut bid_liquidity) = OrderBook::create_blank_liquidity();
 
         // Filling in ask ladder
         let mut best_ask = 100u8;
@@ -143,26 +138,40 @@ impl OrderBook {
         };
     }
 
+    fn set_bid(&self, value: u8) {
+        *self.bid.borrow_mut() = value;
+    }
 
-    /// Function to update/validate the best bid ask after orderbook modification
-    /// 
+    fn set_ask(&self, value: u8) {
+        *self.ask.borrow_mut() = value;
+    }
+
+    /// Function to update/validate the best bid/ask after orderbook
+    /// subtraction or order matching. Note: must update liquidity array before
+    /// calling this method
+    ///
     /// # Arguments
-    /// * best_possible_price - the last know best price before removing an order from the book
+    /// * price - price at which the subtraction/match occured
     /// * side - side from the book that needs best price updated
-    fn update_best(&self, best_possible_price: u8, side: &Side) {
-        let mut best_price = best_possible_price as isize;
-        let price_increment = match side{
+    fn update_best_sub(&self, price: u8, _quantity: i32, side: &Side) {
+        let mut best_price = match side {
+            Side::Buy => *self.bid.borrow() as isize,
+            Side::Sell => *self.ask.borrow() as isize,
+        };
+        if best_price != (price as isize) {
+            return;
+        }
+        let price_increment = match side {
             Side::Buy => -1isize,
             Side::Sell => 1isize,
         };
-
         let ladder_ref = match side {
             Side::Buy => &self.bid_liquidity,
             Side::Sell => &self.ask_liquidity,
         };
 
-        while (best_price<=100) && (best_price >=0) {
-            if ladder_ref.borrow()[(best_price-1) as usize] !=0 {
+        while (best_price <= 100) && (best_price >= 0) {
+            if ladder_ref.borrow()[(best_price - 1) as usize] != 0 {
                 // if non-zero liquidity found, break
                 break;
             } else {
@@ -171,16 +180,41 @@ impl OrderBook {
             }
         }
 
-        if best_price as u8 != best_possible_price {
-            match side {
-                Side::Buy => {
-                    *self.bid.borrow_mut() = best_price as u8;
-                }
-                Side::Sell => {
-                    *self.ask.borrow_mut() = best_price as u8;
-                }
+        // update new best price
+        match side {
+            Side::Buy => {
+                self.set_bid(best_price as u8);
+            }
+            Side::Sell => {
+                self.set_ask(best_price as u8);
             }
         }
+    }
+
+    /// Function to update/validate the best bid/ask after orderbook
+    /// addition
+    ///
+    /// # Arguments
+    /// * price - the price at which an order was placed
+    /// * quantity - quantity added to order book
+    /// * side - side from the book that needs best price updated
+    fn update_best_add(&self, price: u8, quantity: i32, side: &Side) {
+        let best_price = match side {
+            Side::Buy => *self.bid.borrow(),
+            Side::Sell => *self.ask.borrow(),
+        };
+        match side {
+            Side::Buy => {
+                if (price > best_price) && (quantity > 0) {
+                    self.set_bid(price);
+                }
+            }
+            Side::Sell => {
+                if (price < best_price) && (quantity > 0) {
+                    self.set_ask(price);
+                }
+            }
+        };
     }
 
     fn get_orders(&self, price: u8, side: &Side) -> Rc<RefCell<Vec<Order>>> {
@@ -201,13 +235,15 @@ impl OrderBook {
     ///
     /// # Arguments
     /// * price - price to subtract order quantity from
-    /// * quantity - amount to subtract
+    /// * quantity - negative int representing amount to subtract
     /// * side - side of the order
     /// * trader - trader performing action
     ///
     fn sub_front(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
         if quantity == 0 {
             return ();
+        } else if quantity > 0 {
+            panic!("sub_front 'quantity' argument should never be positive");
         };
         // quantity to track progress on cancellations
         let mut quant_to_subtract = quantity;
@@ -215,30 +251,19 @@ impl OrderBook {
         for order in self.get_orders(price, &side).borrow_mut().iter_mut() {
             // make sure that trade maker is same as person modifying
             if order.trader.is_same(&trader) {
-                if quant_to_subtract > *order.quantity.borrow() {
-                    // if we still need to subtract more quantity
-                    // subtract order quant from quant left to subtract
-                    quant_to_subtract -= *order.quantity.borrow();
-                    // 0-out order quantity
-                    *order.quantity.borrow_mut() = 0_i32;
-                } else {
-                    // if our subtraction is satisfied on this order
-                    *order.quantity.borrow_mut() += quant_to_subtract;
+                let order_quantity_delta = order.delta_quantity(quant_to_subtract);
+                quant_to_subtract -= order_quantity_delta;
+                if quant_to_subtract == 0 {
                     break;
                 }
             }
         }
 
+        let delta_liquidity = quantity - quant_to_subtract;
         // update liquidity array
-        self.delta_liquidity(price, quantity, &side);
-        // update best price if needed
-        let last_best = match side{
-            Side::Buy => *self.bid.borrow(),
-            Side::Sell => *self.ask.borrow(),
-        };
-        if price == last_best{
-            self.update_best(last_best, &side);
-        };
+        self.delta_liquidity(price, delta_liquidity, &side);
+        // update best price
+        self.update_best_sub(price, 0, &side);
     }
 
     /// Subtract order quantity from `trader`'s order starting with the LAST order
@@ -248,15 +273,15 @@ impl OrderBook {
     ///
     /// # Arguments
     /// * price - price to subtract order quantity from
-    /// * quantity - amount to subtract
+    /// * quantity - negative int representing amount to subtract
     /// * side - side of the order
     /// * trader - trader performing action
     ///
     fn sub_back(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
         if quantity == 0 {
             return ();
-        } else {
-            self.delta_liquidity(price, quantity, &side);
+        } else if quantity > 0 {
+            panic!("sub_front 'quantity' argument should never be positive");
         };
         // quantity to track progress on cancellations
         let mut quant_to_subtract = quantity;
@@ -264,27 +289,19 @@ impl OrderBook {
         for order in self.get_orders(price, &side).borrow_mut().iter_mut().rev() {
             // make sure that trade maker is same as person modifying
             if order.trader.is_same(&trader) {
-                if quant_to_subtract > *order.quantity.borrow() {
-                    // if we still need to subtract more quantity
-                    // subtract order quant from quant left to subtract
-                    quant_to_subtract -= *order.quantity.borrow();
-                    // 0-out order quantity
-                    *order.quantity.borrow_mut() = 0_i32;
-                } else {
-                    // if our subtraction is satisfied on this order
-                    *order.quantity.borrow_mut() += quant_to_subtract;
+                let order_quantity_delta = order.delta_quantity(quant_to_subtract);
+                quant_to_subtract -= order_quantity_delta;
+                if quant_to_subtract == 0 {
                     break;
                 }
             }
         }
-        // update best price if needed
-        let last_best = match side{
-            Side::Buy => *self.bid.borrow(),
-            Side::Sell => *self.ask.borrow(),
-        };
-        if price == last_best{
-            self.update_best(last_best, &side);
-        };
+
+        let delta_liquidity = quantity - quant_to_subtract;
+        // update liquidity array
+        self.delta_liquidity(price, delta_liquidity, &side);
+        // update best price
+        self.update_best_sub(price, 0, &side);
     }
 
     // Add order quantity to the back of the order book
@@ -300,21 +317,8 @@ impl OrderBook {
     fn add_back(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
         if quantity == 0 {
             return ();
-        } else {
-            self.delta_liquidity(price, quantity, &side);
-        };
-        // update best bid/ask if applicable
-        match side {
-            Side::Buy => {
-                if price > *self.bid.borrow() {
-                    *self.bid.borrow_mut() = price;
-                }
-            }
-            Side::Sell => {
-                if price < *self.ask.borrow() {
-                    *self.ask.borrow_mut() = price;
-                }
-            }
+        } else if quantity < 0 {
+            panic!("sub_front 'quantity' argument should never be positive");
         };
         // check if last order in book is of same trader
         let can_modify = match self.get_orders(price, &side).borrow().last() {
@@ -324,23 +328,26 @@ impl OrderBook {
         if can_modify {
             // if we can modify, we know there is a last Order, so we can unwrap
             // and it is the same trader and `trader` arguement
-            *self
-                .get_orders(price, &side)
+            self.get_orders(price, &side)
                 .borrow_mut()
                 .last_mut()
                 .unwrap()
-                .quantity
-                .borrow_mut() += quantity;
+                .delta_quantity(quantity);
         } else {
             // if we can't modify, we need to create a new Order
             // and push it into price level Vec
             let orders = self.get_orders(price, &side);
-            let new_order = Order::new(&trader, quantity, side, price);
+            let new_order = Order::new(&trader, quantity, side.clone(), price);
             orders.borrow_mut().push(new_order);
         }
+
+        // update liquidity array
+        self.delta_liquidity(price, quantity, &side);
+        // update best price
+        self.update_best_add(price, quantity, &side);
     }
 
-    fn delta_liquidity(&self, price: u8, quantity: i32, side: &Side){
+    fn delta_liquidity(&self, price: u8, quantity: i32, side: &Side) {
         let price_idx = (price - 1) as usize;
         match side {
             Side::Buy => {
@@ -397,11 +404,11 @@ impl OrderBook {
 
         // update best bid/ask if enough orders were taken
         let make_side = &take_order.side.opposite();
-        let last_best = match make_side{
+        let last_best = match make_side {
             Side::Buy => *self.bid.borrow(),
             Side::Sell => *self.ask.borrow(),
         };
-        self.update_best(last_best, make_side);
+        self.update_best_sub(last_best, 0, make_side);
     }
 
     /// Digest an order place action
@@ -478,7 +485,7 @@ impl OrderBook {
     ///
     /// # Returns
     ///
-    pub fn digest_action(&self, action: Action){
+    pub fn digest_action(&self, action: Action) {
         match action {
             Action::OrderPlace(ts, price, quant, side, trader) => {
                 self.digest_order_place(ts, price, quant, side, trader);
