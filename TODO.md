@@ -7,6 +7,6 @@
 
 **/src/order_book/order_book.rs**
 - add error corrector
-- update best bid/ask with every every orderbook change
+- handle empty buy/sell market
 
 
