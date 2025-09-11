@@ -16,6 +16,11 @@ pub struct BookSnapshot {
 }
 
 impl Order {
+    /// 
+    /// # Arguements
+    /// 
+    /// # Returns
+    /// 
     pub fn new(trader: &Rc<Trader>, quantity: i32, side: Side, price: u8) -> Self {
         Order {
             trader: trader.clone(),
@@ -26,7 +31,7 @@ impl Order {
     }
 
     /// Match two orders at the price determined by the maker (i.e. self)
-    /// So if a is the maker order and b is the take order. The correct
+    /// So if a is the maker order and b is the take order. The correct 
     /// code would be a.fill(&b) NOT b.fill(&a)
     ///
     /// # Arguments
