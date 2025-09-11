@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use serde::de::value;
+
 use super::updates::{Side, Trader};
 
 pub struct Order {
@@ -28,6 +30,19 @@ impl Order {
             side,
             price,
         }
+    }
+
+    /// 
+    /// # Arguements
+    /// 
+    /// # Returns
+    /// The actual applied change to the order quantity
+    pub fn delta_quantity(&self, quantity: i32) -> i32 {
+        let value_after_change = (*self.quantity.borrow() + quantity).max(0);
+        let applied_delta = value_after_change - *self.quantity.borrow();
+        *self.quantity.borrow_mut() = value_after_change;
+        return applied_delta
+
     }
 
     /// Match two orders at the price determined by the maker (i.e. self)
