@@ -171,6 +171,10 @@ impl OrderBook {
         };
 
         while (best_price <= 100) && (best_price >= 0) {
+            if (best_price==100) || (best_price==0){
+                // if best_price is 100 or 0 i.e. no orders at all
+                break
+            }
             if ladder_ref.borrow()[(best_price - 1) as usize] != 0 {
                 // if non-zero liquidity found, break
                 break;

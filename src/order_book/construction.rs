@@ -1,8 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use serde::de::value;
-
 use super::updates::{Side, Trader};
 
 pub struct Order {
