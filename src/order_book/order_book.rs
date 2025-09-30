@@ -243,7 +243,7 @@ impl OrderBook {
     /// * side - side of the order
     /// * trader - trader performing action
     ///
-    fn sub_front(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
+    fn sub_front(&self, price: u8, quantity: i32, side: &Side, trader: Rc<Trader>) {
         if quantity == 0 {
             return ();
         } else if quantity > 0 {
@@ -252,7 +252,7 @@ impl OrderBook {
         // quantity to track progress on cancellations
         let mut quant_to_subtract = quantity;
         // iterate through orders at price level in order of oldest -> newest
-        for order in self.get_orders(price, &side).borrow_mut().iter_mut() {
+        for order in self.get_orders(price, side).borrow_mut().iter_mut() {
             // make sure that trade maker is same as person modifying
             if order.trader.is_same(&trader) {
                 let order_quantity_delta = order.delta_quantity(quant_to_subtract);
@@ -265,9 +265,9 @@ impl OrderBook {
 
         let delta_liquidity = quantity - quant_to_subtract;
         // update liquidity array
-        self.delta_liquidity(price, delta_liquidity, &side);
+        self.delta_liquidity(price, delta_liquidity, side);
         // update best price
-        self.update_best_sub(price, 0, &side);
+        self.update_best_sub(price, 0, side);
     }
 
     /// Subtract order quantity from `trader`'s order starting with the LAST order
@@ -281,7 +281,7 @@ impl OrderBook {
     /// * side - side of the order
     /// * trader - trader performing action
     ///
-    fn sub_back(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
+    fn sub_back(&self, price: u8, quantity: i32, side: &Side, trader: Rc<Trader>) {
         if quantity == 0 {
             return ();
         } else if quantity > 0 {
@@ -290,7 +290,7 @@ impl OrderBook {
         // quantity to track progress on cancellations
         let mut quant_to_subtract = quantity;
         // iterate through orders at price level in order of newest -> oldest
-        for order in self.get_orders(price, &side).borrow_mut().iter_mut().rev() {
+        for order in self.get_orders(price, side).borrow_mut().iter_mut().rev() {
             // make sure that trade maker is same as person modifying
             if order.trader.is_same(&trader) {
                 let order_quantity_delta = order.delta_quantity(quant_to_subtract);
@@ -303,9 +303,9 @@ impl OrderBook {
 
         let delta_liquidity = quantity - quant_to_subtract;
         // update liquidity array
-        self.delta_liquidity(price, delta_liquidity, &side);
+        self.delta_liquidity(price, delta_liquidity, side);
         // update best price
-        self.update_best_sub(price, 0, &side);
+        self.update_best_sub(price, 0, side);
     }
 
     // Add order quantity to the back of the order book
@@ -318,21 +318,21 @@ impl OrderBook {
     /// * side - side of the order
     /// * trader - trader performing action
     ///
-    fn add_back(&self, price: u8, quantity: i32, side: Side, trader: Rc<Trader>) {
+    fn add_back(&self, price: u8, quantity: i32, side: &Side, trader: Rc<Trader>) {
         if quantity == 0 {
             return ();
         } else if quantity < 0 {
             panic!("sub_front 'quantity' argument should never be positive");
         };
         // check if last order in book is of same trader
-        let can_modify = match self.get_orders(price, &side).borrow().last() {
+        let can_modify = match self.get_orders(price, side).borrow().last() {
             Some(order) => order.trader.is_same(&trader),
             None => false,
         };
         if can_modify {
             // if we can modify, we know there is a last Order, so we can unwrap
             // and it is the same trader and `trader` arguement
-            self.get_orders(price, &side)
+            self.get_orders(price, side)
                 .borrow_mut()
                 .last_mut()
                 .unwrap()
@@ -340,15 +340,15 @@ impl OrderBook {
         } else {
             // if we can't modify, we need to create a new Order
             // and push it into price level Vec
-            let orders = self.get_orders(price, &side);
+            let orders = self.get_orders(price, side);
             let new_order = Order::new(&trader, quantity, side.clone(), price);
             orders.borrow_mut().push(new_order);
         }
 
         // update liquidity array
-        self.delta_liquidity(price, quantity, &side);
+        self.delta_liquidity(price, quantity, side);
         // update best price
-        self.update_best_add(price, quantity, &side);
+        self.update_best_add(price, quantity, side);
     }
 
     fn delta_liquidity(&self, price: u8, quantity: i32, side: &Side) {
@@ -403,6 +403,7 @@ impl OrderBook {
                 break;
             }
 
+            self.clean_price_level(best_price as u8, &take_order.side.opposite());
             best_price += price_increment;
         }
 
@@ -413,6 +414,13 @@ impl OrderBook {
             Side::Sell => *self.ask.borrow(),
         };
         self.update_best_sub(last_best, 0, make_side);
+    }
+
+    /// Cleans up orders at a specified price level and side to drop those with quantity 0
+    fn clean_price_level(&self, price: u8, side: &Side) {
+        self.get_orders(price, side)
+            .borrow_mut()
+            .retain(|x| *x.quantity.borrow()!=0);
     }
 
     /// Digest an order place action
@@ -436,13 +444,14 @@ impl OrderBook {
         if quant > 0 {
             let take_order = Order::new(&trader, quant, side.clone(), price);
             self.match_order(&take_order);
-            self.add_back(price, *take_order.quantity.borrow(), side, trader);
+            self.add_back(price, *take_order.quantity.borrow(), &side, trader);
         } else if quant < 0 {
             if trader.is_me() {
-                self.sub_back(price, quant, side, trader);
+                self.sub_back(price, quant, &side, trader);
             } else {
-                self.sub_front(price, quant, side, trader);
+                self.sub_front(price, quant, &side, trader);
             }
+            self.clean_price_level(price, &side);
         }
 
         0i32
@@ -466,10 +475,11 @@ impl OrderBook {
         return quant - *take_order.quantity.borrow();
     }
 
-    ///
+    /// Deletes all order place by `trader` at a specified price and side
     /// # Arguments
-    ///
-    /// # Returns
+    /// * price - price level to cancel all orders at
+    /// * side - side to cancel orders on
+    /// * trader - trader whose orders should be cancelled
     ///
     fn digest_order_cancel(&self, _ts: f64, price: u8, side: Side, trader: Rc<Trader>) {
         let price_idx = (price as usize) - 1;
@@ -481,7 +491,7 @@ impl OrderBook {
         // only retain orders from traders who are not the cancellign trader
         orders
             .borrow_mut()
-            .retain(|order| !order.trader.is_same(&trader));
+            .retain(|order| (!order.trader.is_same(&trader)) && (*order.quantity.borrow()!=0));
     }
 
     ///
