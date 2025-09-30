@@ -503,3 +503,110 @@ impl OrderBook {
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::time_keeping::timer::Timer;
+    use crate::actions::action_producer::ActionProducer;
+
+    fn test_entities() -> (Rc<Timer>, Rc<Trader>, Rc<Trader>, ActionProducer, ActionProducer) {
+        let timer = Rc::new(Timer::new(1756428105.0, 0.5));
+        let me = Rc::new(Trader::new_me());
+        let other = Rc::new(Trader::new_other());
+        let me_prod = ActionProducer::new(&timer, &me, 0.0);
+        let other_prod = ActionProducer::new(&timer, &other, 0.0);
+        (timer, me, other, me_prod, other_prod)
+    }
+    fn double_side_ob(other_trader: &Rc<Trader>) -> OrderBook{
+        OrderBook::from_snapshot(vec![(51, 10)], vec![(49, 10)], other_trader)
+    }
+    fn one_side_ob_buy(other_trader: &Rc<Trader>) -> OrderBook {
+        OrderBook::from_snapshot(vec![], vec![(49, 10)], other_trader)
+    }
+    fn one_side_ob_sell(other_trader: &Rc<Trader>) -> OrderBook {
+        OrderBook::from_snapshot(vec![(51, 10)], vec![], other_trader)
+    }
+    fn test_books(other_trader: &Rc<Trader>) -> (OrderBook, OrderBook, OrderBook){
+        (
+            one_side_ob_buy(other_trader),
+            one_side_ob_sell(other_trader),
+            double_side_ob(other_trader),
+        )
+    }
+    fn double_take_orders(me_producer: &ActionProducer, quant: i32) -> (Action, Action) {
+        let take_1 = me_producer.trade_take(55, quant, Side::Buy);
+        let take_2 = me_producer.trade_take(55, quant, Side::Buy);
+        (take_1, take_2)
+    }
+
+    /// Test scenario where liquidity is 0 on one side and then a take order action is produced
+    #[test]
+    fn test_take_empty(){
+        let (_, _, other, me_prod, _) = test_entities();
+        let (one_side_b, one_side_s, two_side) = test_books(&other); 
+        
+        // take all orders and attempt to take another
+        let(take_1, take_2) = double_take_orders(&me_prod, 10);
+        two_side.digest_action(take_1); // take all orders
+        two_side.digest_action(take_2); // take when no orders exist
+        assert!(*two_side.ask.borrow()==100u8, "ask should be 100 when no sell orders exist");
+        
+        // take when no orders exist
+        let(take_1, _) = double_take_orders(&me_prod, 10);
+        one_side_b.digest_action(take_1); // take when no orders exist
+        assert!(*one_side_b.ask.borrow()==100u8, "ask should be 100 when no sell orders exist");
+        let(take_1, take_2) = double_take_orders(&me_prod, 10);
+        one_side_s.digest_action(take_1); // take all orders
+        one_side_s.digest_action(take_2); // take when no orders exist
+        assert!(*one_side_b.ask.borrow()==100u8, "ask should be 100 when no sell orders exist");
+    }
+
+    /// test placing order at different places in book that match or don't match
+    #[test]
+    fn test_order_place(){
+        let (_, _, other, me_prod, other_prod) = test_entities();
+        let (one_side_b, one_side_s, two_side) = test_books(&other); 
+        
+        let act = me_prod.order_place(50, 10, Side::Buy);
+        one_side_b.digest_action(act);
+        assert!(*one_side_b.bid.borrow()==50u8);
+        
+        let act = me_prod.order_place(53, 20, Side::Buy);
+        one_side_s.digest_action(act);
+        assert!(*one_side_s.bid.borrow()==53u8);
+        assert!(*one_side_s.ask.borrow()==100u8);
+        
+        let act = other_prod.order_place(53, 50, Side::Sell);
+        two_side.digest_action(act);
+        let act = me_prod.order_place(53, 20, Side::Buy);
+        two_side.digest_action(act);
+        assert!(*two_side.bid.borrow()==49u8);
+        assert!(*two_side.ask.borrow()==53u8);
+    }
+    
+    // test matched trade takes and unmatched trade take impact on book
+    #[test]
+    fn test_trade_take(){
+        let (_, _, other, me_prod, other_prod) = test_entities();
+        let (one_side_b, one_side_s, two_side) = test_books(&other); 
+        
+        let act = me_prod.trade_take(99, 100, Side::Buy);
+        two_side.digest_action(act);
+        assert!(*two_side.bid.borrow()==49u8);
+        assert!(*two_side.ask.borrow()==100u8);
+        
+        let act = other_prod.trade_take(99, 100, Side::Buy);
+        one_side_b.digest_action(act);
+        assert!(*one_side_b.bid.borrow()==49u8);
+        assert!(*one_side_b.ask.borrow()==100u8);
+        
+        let act = other_prod.trade_take(99, 100, Side::Buy);
+        one_side_s.digest_action(act);
+        assert!(*one_side_s.bid.borrow()==0u8);
+        assert!(*one_side_s.ask.borrow()==100u8);
+        
+    }
+
+}
